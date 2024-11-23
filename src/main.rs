@@ -1,32 +1,30 @@
-//! Esplora Command Line Interface
+//! Esplora API Command Line Interface.
 //!
-//! This binary provides A command line interface
-//! for rust-esplora-client.
+//! This binary provides a command line interface (CLI) for
+//! [`rust-esplora-client`](esplora_client).
 
-use bitcoin::Txid;
-use clap::{Parser, Subcommand};
-use esplora_client::Builder;
-
-use bitcoin::Script;
 use std::str::FromStr;
 
-use bitcoin::consensus::encode::deserialize;
-use bitcoin::Transaction;
-use hex::test_hex_unwrap as hex;
+use anyhow::anyhow;
+use bitcoin::{Address, Transaction, Txid};
+use clap::{Parser, Subcommand};
+use esplora_client::Builder;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-    #[arg(default_value = "https://blockstream.info/api")]
-    network: String,
+    #[clap(long, short, default_value = "https://blockstream.info/api")]
+    network: Option<String>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Get transaction option by id
+    /// Get transaction by id.
     GetTx { id: String },
+    /// Get info of a transaction.
+    GetTxInfo { id: String },
     /// Get transaction at block index
     GetTxAtBlockIndex { block_hash: String, index: String },
     /// Get transaction status by id
@@ -36,7 +34,7 @@ enum Commands {
     /// Get block status by block hash
     GetBlockStatus { block_hash: String },
     /// Get block by block hash
-    GetBlockByHash { block_hash: String },
+    GetBlock { block_hash: String },
     /// Get transaction merkle proof by tx id
     GetMerkleProof { id: String },
     /// Get transaction merkle block inclusion proof by id
@@ -54,8 +52,8 @@ enum Commands {
     /// Get a fee estimate by confirmation target in sat/vB
     GetFeeEstimates {},
     /// Get confirmed transaction history for the specified address/scripthash sorted by date
-    GetScriptHashTransactions {
-        script_bytes: String,
+    GetScriptHashTxs {
+        address: Address<bitcoin::address::NetworkUnchecked>,
         last_seen: Option<String>,
     },
     /// Get recent block summaries at the tip or at height if provided (max summaries is backend
@@ -63,107 +61,114 @@ enum Commands {
     GetBlocks { height: Option<String> },
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let builder = Builder::new(&cli.network);
-    let blocking_client = builder.build_blocking();
+    let network = cli.network.expect("must set esplora url");
+    let builder = Builder::new(&network);
+    let client = builder.build_blocking();
 
-    match &cli.command {
+    match cli.command {
         Commands::GetTx { id } => {
-            let tx_id: bitcoin::Txid = id.parse().unwrap();
-            let r = blocking_client.get_tx(&tx_id).unwrap().unwrap();
-            println!("{:#?}", r);
+            let txid: Txid = id.parse()?;
+
+            let tx: Transaction = client.get_tx(&txid)?.ok_or(anyhow!("None"))?;
+            println!("{:#?}", bitcoin::consensus::encode::serialize_hex(&tx));
+        }
+        Commands::GetTxInfo { id } => {
+            let txid: Txid = id.parse()?;
+
+            let tx_info = client.get_tx_info(&txid)?.ok_or(anyhow!("None"))?;
+            println!("{:#?}", tx_info);
         }
         Commands::GetTxAtBlockIndex { block_hash, index } => {
-            let hash: bitcoin::BlockHash = block_hash.parse().unwrap();
-            let i: usize = index.parse().unwrap();
-            let r = blocking_client
-                .get_txid_at_block_index(&hash, i)
-                .unwrap()
-                .unwrap();
-            println!("{:#?}", r);
+            let hash: bitcoin::BlockHash = block_hash.parse()?;
+            let i: usize = index.parse()?;
+            let txid = client
+                .get_txid_at_block_index(&hash, i)?
+                .ok_or(anyhow!("None"))?;
+            println!("{:#?}", txid);
         }
         Commands::GetTxStatus { id } => {
-            let tx_id: bitcoin::Txid = id.parse().unwrap();
-            let r = blocking_client.get_tx_status(&tx_id).unwrap();
-            println!("{:#?}", r);
+            let tx_id: Txid = id.parse()?;
+            let res = client.get_tx_status(&tx_id)?;
+            println!("{:#?}", res);
         }
         Commands::GetHeaderByHash { block_hash } => {
-            let hash: bitcoin::BlockHash = block_hash.parse().unwrap();
-            let r = blocking_client.get_header_by_hash(&hash).unwrap();
-            println!("{:#?}", r);
+            let hash: bitcoin::BlockHash = block_hash.parse()?;
+            let res = client.get_header_by_hash(&hash)?;
+            println!("{:#?}", res);
         }
         Commands::GetBlockStatus { block_hash } => {
-            let hash: bitcoin::BlockHash = block_hash.parse().unwrap();
-            let r = blocking_client.get_block_status(&hash).unwrap();
-            println!("{:#?}", r);
+            let hash: bitcoin::BlockHash = block_hash.parse()?;
+            let res = client.get_block_status(&hash)?;
+            println!("{:#?}", res);
         }
-        Commands::GetBlockByHash { block_hash } => {
-            let hash: bitcoin::BlockHash = block_hash.parse().unwrap();
-            let r = blocking_client.get_block_by_hash(&hash).unwrap();
-            println!("{:#?}", r);
+        Commands::GetBlock { block_hash } => {
+            let hash: bitcoin::BlockHash = block_hash.parse()?;
+            let block = client.get_block_by_hash(&hash)?;
+            if let Some(block) = block {
+                for tx in &block.txdata {
+                    if !tx.is_coinbase() {
+                        println!("{:#?}", tx.compute_txid());
+                    }
+                }
+            }
         }
         Commands::GetMerkleProof { id } => {
-            let tx_id: bitcoin::Txid = id.parse().unwrap();
-            let r = blocking_client.get_merkle_proof(&tx_id).unwrap().unwrap();
-            println!("{:#?}", r);
+            let tx_id: Txid = id.parse()?;
+            let res = client.get_merkle_proof(&tx_id)?;
+            println!("{:#?}", res);
         }
         Commands::GetMerkleBlock { id } => {
-            let tx_id: bitcoin::Txid = id.parse().unwrap();
-            let r = blocking_client.get_merkle_block(&tx_id).unwrap();
-            println!("{:#?}", r);
+            let tx_id: Txid = id.parse()?;
+            let res = client.get_merkle_block(&tx_id)?;
+            println!("{:#?}", res);
         }
         Commands::GetOutputStatus { id, index } => {
-            let tx_id: bitcoin::Txid = id.parse().unwrap();
-            let i: u64 = index.parse().unwrap();
-            let r = blocking_client
-                .get_output_status(&tx_id, i)
-                .unwrap()
-                .unwrap();
-            println!("{:#?}", r);
+            let tx_id: Txid = id.parse()?;
+            let i: u64 = index.parse()?;
+            let res = client
+                .get_output_status(&tx_id, i)?
+                .ok_or(anyhow!("None"))?;
+            println!("{:#?}", res);
         }
-        Commands::Broadcast { transaction_hex } => {
-            let tx_bytes = hex!(transaction_hex);
-            let tx: Transaction = deserialize(&tx_bytes).unwrap();
-            blocking_client.broadcast(&tx).unwrap();
+        Commands::Broadcast {
+            transaction_hex: tx_hex,
+        } => {
+            let tx: bitcoin::Transaction = bitcoin::consensus::encode::deserialize_hex(&tx_hex)?;
+            client.broadcast(&tx)?;
         }
         Commands::GetHeight {} => {
-            let r = blocking_client.get_height().unwrap();
-            println!("{:#?}", r);
+            let res = client.get_height()?;
+            println!("{:#?}", res);
         }
         Commands::GetTipHash {} => {
-            let r = blocking_client.get_tip_hash().unwrap();
-            println!("{:#?}", r);
+            let res = client.get_tip_hash()?;
+            println!("{:#?}", res);
         }
         Commands::GetBlockHash { height } => {
-            let h: u32 = height.parse().unwrap();
-            let r = blocking_client.get_block_hash(h).unwrap();
-            println!("{:#?}", r);
+            let h: u32 = height.parse()?;
+            let res = client.get_block_hash(h)?;
+            println!("{:#?}", res);
         }
         Commands::GetFeeEstimates {} => {
-            let r = blocking_client.get_fee_estimates().unwrap();
-            println!("{:#?}", r);
+            let res = client.get_fee_estimates()?;
+            println!("{:#?}", res);
         }
-        Commands::GetScriptHashTransactions {
-            script_bytes,
-            last_seen,
-        } => {
-            let mut txid: Option<Txid> = None;
-            if let Some(t) = last_seen {
-                txid = Some(Txid::from_str(t).unwrap());
+        Commands::GetScriptHashTxs { address, last_seen } => {
+            let last_txid = last_seen.map(|s| Txid::from_str(&s).unwrap());
+            let addr = address.clone().assume_checked();
+            let txs = client.scripthash_txs(&addr.script_pubkey(), last_txid)?;
+            for tx in txs {
+                println!("{:#?}", tx.txid);
             }
-            let b = script_bytes.as_bytes();
-            let s = Script::from_bytes(b);
-            let r = blocking_client.scripthash_txs(s, txid).unwrap();
-            println!("{:#?}", r);
         }
         Commands::GetBlocks { height } => {
-            let mut bh = None;
-            if let Some(h) = height {
-                bh = Some(h.parse().unwrap());
-            }
-            let r = blocking_client.get_blocks(bh).unwrap();
-            println!("{:#?}", r);
+            let height = height.map(|s| s.parse::<u32>().unwrap());
+            let res = client.get_blocks(height)?;
+            println!("{:#?}", res);
         }
     }
+
+    Ok(())
 }
