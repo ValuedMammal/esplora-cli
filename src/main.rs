@@ -26,7 +26,7 @@ enum Commands {
     /// Get info of a transaction.
     GetTxInfo { id: String },
     /// Get transaction at block index
-    GetTxAtBlockIndex { block_hash: String, index: String },
+    GetTxAtBlockIndex { block_hash: String, index: usize },
     /// Get transaction status by id
     GetTxStatus { id: String },
     /// Get block header by block hash
@@ -40,7 +40,7 @@ enum Commands {
     /// Get transaction merkle block inclusion proof by id
     GetMerkleBlock { id: String },
     /// Get output spending status by tx id and output index
-    GetOutputStatus { id: String, index: String },
+    GetOutputStatus { id: String, index: u64 },
     /// Broadcast transaction.
     Broadcast { transaction_hex: String },
     /// Get blockchain tip height
@@ -58,7 +58,11 @@ enum Commands {
     },
     /// Get recent block summaries at the tip or at height if provided (max summaries is backend
     /// dependant).
-    GetBlocks { height: Option<String> },
+    GetBlocks {
+        /// Height to fetch blocks from.
+        #[clap(long, short = 's')]
+        height: Option<u32>,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -82,9 +86,8 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::GetTxAtBlockIndex { block_hash, index } => {
             let hash: bitcoin::BlockHash = block_hash.parse()?;
-            let i: usize = index.parse()?;
             let txid = client
-                .get_txid_at_block_index(&hash, i)?
+                .get_txid_at_block_index(&hash, index)?
                 .ok_or(anyhow!("None"))?;
             println!("{:#?}", txid);
         }
@@ -126,9 +129,8 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::GetOutputStatus { id, index } => {
             let tx_id: Txid = id.parse()?;
-            let i: u64 = index.parse()?;
             let res = client
-                .get_output_status(&tx_id, i)?
+                .get_output_status(&tx_id, index)?
                 .ok_or(anyhow!("None"))?;
             println!("{:#?}", res);
         }
@@ -156,7 +158,10 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", res);
         }
         Commands::GetScriptHashTxs { address, last_seen } => {
-            let last_txid = last_seen.map(|s| Txid::from_str(&s).unwrap());
+            let mut last_txid = None;
+            if let Some(s) = last_seen {
+                last_txid = Some(Txid::from_str(&s)?);
+            }
             let addr = address.clone().assume_checked();
             let txs = client.scripthash_txs(&addr.script_pubkey(), last_txid)?;
             for tx in txs {
@@ -164,7 +169,6 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Commands::GetBlocks { height } => {
-            let height = height.map(|s| s.parse::<u32>().unwrap());
             let res = client.get_blocks(height)?;
             println!("{:#?}", res);
         }
