@@ -77,8 +77,8 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", bitcoin::consensus::encode::serialize_hex(&tx));
         }
         Commands::GetTxInfo { txid } => {
-            let tx_info = client.get_tx_info(&txid)?.ok_or(anyhow!("None"))?;
-            println!("{:#?}", tx_info);
+            let res = client.get_tx_info(&txid)?;
+            println!("{:#?}", res);
         }
         Commands::GetTxAtBlockIndex { hash, index } => {
             let txid = client
@@ -87,16 +87,16 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", txid);
         }
         Commands::GetTxStatus { txid } => {
-            let res = client.get_tx_status(&txid)?;
-            println!("{:#?}", res);
+            let tx_status = client.get_tx_status(&txid)?;
+            println!("{:#?}", tx_status);
         }
         Commands::GetHeader { hash } => {
-            let res = client.get_header_by_hash(&hash)?;
-            println!("{:#?}", res);
+            let header = client.get_header_by_hash(&hash)?;
+            println!("{:#?}", header);
         }
         Commands::GetBlockStatus { hash } => {
-            let res = client.get_block_status(&hash)?;
-            println!("{:#?}", res);
+            let status = client.get_block_status(&hash)?;
+            println!("{:#?}", status);
         }
         Commands::GetBlock { hash } => {
             let block = client.get_block_by_hash(&hash)?.ok_or(anyhow!("None"))?;
@@ -115,30 +115,30 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", res);
         }
         Commands::GetOutputStatus { txid, index } => {
-            let res = client
+            let status = client
                 .get_output_status(&txid, index)?
                 .ok_or(anyhow!("None"))?;
-            println!("{:#?}", res);
+            println!("{:#?}", status);
         }
         Commands::Broadcast { tx_hex } => {
             let tx: bitcoin::Transaction = bitcoin::consensus::encode::deserialize_hex(&tx_hex)?;
             client.broadcast(&tx)?;
         }
         Commands::GetHeight => {
-            let res = client.get_height()?;
-            println!("{:#?}", res);
+            let height = client.get_height()?;
+            println!("{:#?}", height);
         }
         Commands::GetTipHash => {
-            let res = client.get_tip_hash()?;
-            println!("{:#?}", res);
+            let hash = client.get_tip_hash()?;
+            println!("{:#?}", hash);
         }
         Commands::GetBlockHash { height } => {
-            let res = client.get_block_hash(height)?;
-            println!("{:#?}", res);
+            let hash = client.get_block_hash(height)?;
+            println!("{:#?}", hash);
         }
         Commands::GetFeeEstimates => {
-            let res = client.get_fee_estimates()?;
-            println!("{:#?}", res);
+            let fees = client.get_fee_estimates()?;
+            println!("{:#?}", fees);
         }
         Commands::GetScriptHashTxs { address, last_seen } => {
             let mut last_txid = None;
@@ -152,8 +152,8 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Commands::GetBlocks { height } => {
-            let res = client.get_blocks(height)?;
-            println!("{:#?}", res);
+            let blocks = client.get_blocks(height)?;
+            println!("{:#?}", blocks);
         }
     }
 
