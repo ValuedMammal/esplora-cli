@@ -48,7 +48,7 @@ enum Commands {
     /// Get current blockchain tip block hash
     GetTipHash {},
     /// Get block hash at height
-    GetBlockHash { height: String },
+    GetBlockHash { height: u32 },
     /// Get a fee estimate by confirmation target in sat/vB
     GetFeeEstimates {},
     /// Get confirmed transaction history for the specified address/scripthash sorted by date
@@ -149,8 +149,7 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", res);
         }
         Commands::GetBlockHash { height } => {
-            let h: u32 = height.parse()?;
-            let res = client.get_block_hash(h)?;
+            let res = client.get_block_hash(height)?;
             println!("{:#?}", res);
         }
         Commands::GetFeeEstimates {} => {
