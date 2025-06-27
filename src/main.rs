@@ -6,7 +6,7 @@
 use std::str::FromStr;
 
 use anyhow::anyhow;
-use bitcoin::{Address, Transaction, Txid};
+use bitcoin::{Address, BlockHash, Txid};
 use clap::{Parser, Subcommand};
 use esplora_client::Builder;
 
@@ -22,35 +22,35 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Get transaction by id.
-    GetTx { id: String },
+    GetTx { txid: Txid },
     /// Get info of a transaction.
-    GetTxInfo { id: String },
+    GetTxInfo { txid: Txid },
     /// Get transaction at block index
-    GetTxAtBlockIndex { block_hash: String, index: usize },
+    GetTxAtBlockIndex { hash: BlockHash, index: usize },
     /// Get transaction status by id
-    GetTxStatus { id: String },
+    GetTxStatus { txid: Txid },
     /// Get block header by block hash
-    GetHeaderByHash { block_hash: String },
+    GetHeader { hash: BlockHash },
     /// Get block status by block hash
-    GetBlockStatus { block_hash: String },
+    GetBlockStatus { hash: BlockHash },
     /// Get block by block hash
-    GetBlock { block_hash: String },
+    GetBlock { hash: BlockHash },
     /// Get transaction merkle proof by tx id
-    GetMerkleProof { id: String },
+    GetMerkleProof { txid: Txid },
     /// Get transaction merkle block inclusion proof by id
-    GetMerkleBlock { id: String },
+    GetMerkleBlock { txid: Txid },
     /// Get output spending status by tx id and output index
-    GetOutputStatus { id: String, index: u64 },
+    GetOutputStatus { txid: Txid, index: u64 },
     /// Broadcast transaction.
-    Broadcast { transaction_hex: String },
+    Broadcast { tx_hex: String },
     /// Get blockchain tip height
-    GetHeight {},
+    GetHeight,
     /// Get current blockchain tip block hash
-    GetTipHash {},
+    GetTipHash,
     /// Get block hash at height
     GetBlockHash { height: u32 },
     /// Get a fee estimate by confirmation target in sat/vB
-    GetFeeEstimates {},
+    GetFeeEstimates,
     /// Get confirmed transaction history for the specified address/scripthash sorted by date
     GetScriptHashTxs {
         address: Address<bitcoin::address::NetworkUnchecked>,
@@ -72,79 +72,63 @@ fn main() -> anyhow::Result<()> {
     let client = builder.build_blocking();
 
     match cli.command {
-        Commands::GetTx { id } => {
-            let txid: Txid = id.parse()?;
-
-            let tx: Transaction = client.get_tx(&txid)?.ok_or(anyhow!("None"))?;
+        Commands::GetTx { txid } => {
+            let tx = client.get_tx(&txid)?.ok_or(anyhow!("None"))?;
             println!("{:#?}", bitcoin::consensus::encode::serialize_hex(&tx));
         }
-        Commands::GetTxInfo { id } => {
-            let txid: Txid = id.parse()?;
-
+        Commands::GetTxInfo { txid } => {
             let tx_info = client.get_tx_info(&txid)?.ok_or(anyhow!("None"))?;
             println!("{:#?}", tx_info);
         }
-        Commands::GetTxAtBlockIndex { block_hash, index } => {
-            let hash: bitcoin::BlockHash = block_hash.parse()?;
+        Commands::GetTxAtBlockIndex { hash, index } => {
             let txid = client
                 .get_txid_at_block_index(&hash, index)?
                 .ok_or(anyhow!("None"))?;
             println!("{:#?}", txid);
         }
-        Commands::GetTxStatus { id } => {
-            let tx_id: Txid = id.parse()?;
-            let res = client.get_tx_status(&tx_id)?;
+        Commands::GetTxStatus { txid } => {
+            let res = client.get_tx_status(&txid)?;
             println!("{:#?}", res);
         }
-        Commands::GetHeaderByHash { block_hash } => {
-            let hash: bitcoin::BlockHash = block_hash.parse()?;
+        Commands::GetHeader { hash } => {
             let res = client.get_header_by_hash(&hash)?;
             println!("{:#?}", res);
         }
-        Commands::GetBlockStatus { block_hash } => {
-            let hash: bitcoin::BlockHash = block_hash.parse()?;
+        Commands::GetBlockStatus { hash } => {
             let res = client.get_block_status(&hash)?;
             println!("{:#?}", res);
         }
-        Commands::GetBlock { block_hash } => {
-            let hash: bitcoin::BlockHash = block_hash.parse()?;
-            let block = client.get_block_by_hash(&hash)?;
-            if let Some(block) = block {
-                for tx in &block.txdata {
-                    if !tx.is_coinbase() {
-                        println!("{:#?}", tx.compute_txid());
-                    }
+        Commands::GetBlock { hash } => {
+            let block = client.get_block_by_hash(&hash)?.ok_or(anyhow!("None"))?;
+            for tx in &block.txdata {
+                if !tx.is_coinbase() {
+                    println!("{:#?}", tx.compute_txid());
                 }
             }
         }
-        Commands::GetMerkleProof { id } => {
-            let tx_id: Txid = id.parse()?;
-            let res = client.get_merkle_proof(&tx_id)?;
+        Commands::GetMerkleProof { txid } => {
+            let res = client.get_merkle_proof(&txid)?;
             println!("{:#?}", res);
         }
-        Commands::GetMerkleBlock { id } => {
-            let tx_id: Txid = id.parse()?;
-            let res = client.get_merkle_block(&tx_id)?;
+        Commands::GetMerkleBlock { txid } => {
+            let res = client.get_merkle_block(&txid)?;
             println!("{:#?}", res);
         }
-        Commands::GetOutputStatus { id, index } => {
-            let tx_id: Txid = id.parse()?;
+        Commands::GetOutputStatus { txid, index } => {
             let res = client
-                .get_output_status(&tx_id, index)?
+                .get_output_status(&txid, index)?
                 .ok_or(anyhow!("None"))?;
             println!("{:#?}", res);
         }
-        Commands::Broadcast {
-            transaction_hex: tx_hex,
-        } => {
+        Commands::Broadcast { tx_hex } => {
             let tx: bitcoin::Transaction = bitcoin::consensus::encode::deserialize_hex(&tx_hex)?;
             client.broadcast(&tx)?;
         }
-        Commands::GetHeight {} => {
+        Commands::GetHeight => {
             let res = client.get_height()?;
             println!("{:#?}", res);
         }
-        Commands::GetTipHash {} => {
+        Commands::GetTipHash => {
             let res = client.get_tip_hash()?;
             println!("{:#?}", res);
         }
@@ -152,7 +136,7 @@ fn main() -> anyhow::Result<()> {
             let res = client.get_block_hash(height)?;
             println!("{:#?}", res);
         }
-        Commands::GetFeeEstimates {} => {
+        Commands::GetFeeEstimates => {
             let res = client.get_fee_estimates()?;
             println!("{:#?}", res);
         }
