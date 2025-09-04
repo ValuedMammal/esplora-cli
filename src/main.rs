@@ -44,10 +44,8 @@ enum Commands {
     GetOutputStatus { txid: Txid, index: u64 },
     /// Broadcast transaction.
     Broadcast { tx_hex: String },
-    /// Get blockchain tip height
-    GetHeight,
-    /// Get current blockchain tip block hash
-    GetTipHash,
+    /// Get best blockhash and height
+    GetTip,
     /// Get block hash at height
     GetBlockHash { height: u32 },
     /// Get a fee estimate by confirmation target in sat/vB
@@ -58,7 +56,7 @@ enum Commands {
         last_seen: Option<Txid>,
     },
     /// Get recent block summaries at the tip or at height if provided (max summaries is backend
-    /// dependant).
+    /// dependent).
     GetBlocks {
         /// Height to fetch blocks from.
         #[clap(long, short = 's')]
@@ -119,13 +117,9 @@ fn main() -> anyhow::Result<()> {
             let tx: Transaction = consensus::encode::deserialize_hex(&tx_hex)?;
             client.broadcast(&tx)?;
         }
-        Commands::GetHeight => {
-            let height = client.get_height()?;
-            println!("{:#?}", height);
-        }
-        Commands::GetTipHash => {
-            let hash = client.get_tip_hash()?;
-            println!("{:#?}", hash);
+        Commands::GetTip => {
+            let blocks = client.get_blocks(None)?;
+            println!("{:#?}", &blocks[0]);
         }
         Commands::GetBlockHash { height } => {
             let hash = client.get_block_hash(height)?;

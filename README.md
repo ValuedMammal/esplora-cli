@@ -19,12 +19,11 @@ Commands:
   getmerkleblock     Get transaction merkle block inclusion proof by id
   getoutputstatus    Get output spending status by tx id and output index
   broadcast          Broadcast transaction
-  getheight          Get blockchain tip height
-  gettiphash         Get current blockchain tip block hash
+  gettip             Get best blockhash and height
   getblockhash       Get block hash at height
   getfeeestimates    Get a fee estimate by confirmation target in sat/vB
   getscripthashtxs   Get confirmed transaction history for the specified address/scripthash sorted by date
-  getblocks          Get recent block summaries at the tip or at height if provided (max summaries is backend dependant)
+  getblocks          Get recent block summaries at the tip or at height if provided (max summaries is backend dependent)
   help               Print this message or the help of the given subcommand(s)
 
 Options:
