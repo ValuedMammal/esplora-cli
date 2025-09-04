@@ -3,10 +3,8 @@
 //! This binary provides a command line interface (CLI) for
 //! [`rust-esplora-client`](esplora_client).
 
-use std::str::FromStr;
-
 use anyhow::anyhow;
-use bitcoin::{Address, BlockHash, Txid};
+use bitcoin::{consensus, address::NetworkUnchecked, Address, BlockHash, Txid, Transaction};
 use clap::{Parser, Subcommand};
 use esplora_client::Builder;
 
@@ -54,8 +52,8 @@ enum Commands {
     GetFeeEstimates,
     /// Get confirmed transaction history for the specified address/scripthash sorted by date
     GetScriptHashTxs {
-        address: Address<bitcoin::address::NetworkUnchecked>,
-        last_seen: Option<String>,
+        address: Address<NetworkUnchecked>,
+        last_seen: Option<Txid>,
     },
     /// Get recent block summaries at the tip or at height if provided (max summaries is backend
     /// dependant).
@@ -102,9 +100,7 @@ fn main() -> anyhow::Result<()> {
         Commands::GetBlock { hash } => {
             let block = client.get_block_by_hash(&hash)?.ok_or(anyhow!("None"))?;
             for tx in &block.txdata {
-                if !tx.is_coinbase() {
-                    println!("{:#?}", tx.compute_txid());
-                }
+                println!("{:#?}", tx.compute_txid());
             }
         }
         Commands::GetMerkleProof { txid } => {
@@ -122,7 +118,7 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", status);
         }
         Commands::Broadcast { tx_hex } => {
-            let tx: bitcoin::Transaction = bitcoin::consensus::encode::deserialize_hex(&tx_hex)?;
+            let tx: Transaction = consensus::encode::deserialize_hex(&tx_hex)?;
             client.broadcast(&tx)?;
         }
         Commands::GetHeight => {
@@ -142,12 +138,8 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", fees);
         }
         Commands::GetScriptHashTxs { address, last_seen } => {
-            let mut last_txid = None;
-            if let Some(s) = last_seen {
-                last_txid = Some(Txid::from_str(&s)?);
-            }
             let addr = address.clone().assume_checked();
-            let txs = client.scripthash_txs(&addr.script_pubkey(), last_txid)?;
+            let txs = client.scripthash_txs(&addr.script_pubkey(), last_seen)?;
             for tx in txs {
                 println!("{:#?}", tx.txid);
             }
