@@ -16,5 +16,12 @@ readme = "README.md"
 anyhow = "1"
 bitcoin = { version = "0.32.6", features = ["serde", "std"], default-features = false }
 clap = { version = "4.5", features = ["derive", "env"] }
-esplora-client = { version = "0.12.0", features = ["blocking-https"] }
+log = "0.4.28"
+pretty_env_logger = "0.5.0"
 serde_json = "1"
+tokio = { version = "1.47.1", features = ["full"] }
+
+[dependencies.esplora-client]
+# esplora-client = { version = "0.12.0", features = ["blocking-https"] }
+path = "../rust-esplora-client"
+features = ["async-https", "tokio"]
