@@ -20,6 +20,7 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+#[clap(rename_all = "lower")]
 enum Commands {
     /// Get transaction by id.
     GetTx { txid: Txid },
