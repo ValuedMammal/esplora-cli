@@ -3,8 +3,10 @@
 //! This binary provides a command line interface (CLI) for
 //! [`rust-esplora-client`](esplora_client).
 
+#![allow(clippy::uninlined_format_args)]
+
 use anyhow::anyhow;
-use bitcoin::{consensus, address::NetworkUnchecked, Address, BlockHash, Txid, Transaction};
+use bitcoin::{address::NetworkUnchecked, consensus, Address, BlockHash, Transaction, Txid};
 use clap::{Parser, Subcommand};
 use esplora_client::Builder;
 
@@ -80,9 +82,7 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", res);
         }
         Commands::GetTxAtBlockIndex { hash, index } => {
-            let txid = client
-                .get_txid_at_block_index(&hash, index)?
-                .ok_or(anyhow!("None"))?;
+            let txid = client.get_txid_at_block_index(&hash, index)?.ok_or(anyhow!("None"))?;
             println!("{:#?}", txid);
         }
         Commands::GetTxStatus { txid } => {
@@ -112,9 +112,7 @@ fn main() -> anyhow::Result<()> {
             println!("{:#?}", res);
         }
         Commands::GetOutputStatus { txid, index } => {
-            let status = client
-                .get_output_status(&txid, index)?
-                .ok_or(anyhow!("None"))?;
+            let status = client.get_output_status(&txid, index)?.ok_or(anyhow!("None"))?;
             println!("{:#?}", status);
         }
         Commands::Broadcast { tx_hex } => {
