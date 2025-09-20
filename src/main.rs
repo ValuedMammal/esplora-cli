@@ -64,80 +64,84 @@ enum Commands {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let network = cli.network.expect("must set esplora url");
     let builder = Builder::new(&network);
-    let client = builder.build_blocking();
+    let client = builder.build_async()?;
 
     match cli.command {
         Commands::GetTx { txid } => {
-            let tx = client.get_tx(&txid)?.ok_or(anyhow!("None"))?;
+            let tx = client.get_tx(&txid).await?.ok_or(anyhow!("None"))?;
             println!("{:#?}", bitcoin::consensus::encode::serialize_hex(&tx));
         }
         Commands::GetTxInfo { txid } => {
-            let res = client.get_tx_info(&txid)?;
+            let res = client.get_tx_info(&txid).await?;
             println!("{:#?}", res);
         }
         Commands::GetTxAtBlockIndex { hash, index } => {
-            let txid = client.get_txid_at_block_index(&hash, index)?.ok_or(anyhow!("None"))?;
+            let txid = client
+                .get_txid_at_block_index(&hash, index)
+                .await?
+                .ok_or(anyhow!("None"))?;
             println!("{:#?}", txid);
         }
         Commands::GetTxStatus { txid } => {
-            let tx_status = client.get_tx_status(&txid)?;
+            let tx_status = client.get_tx_status(&txid).await?;
             println!("{:#?}", tx_status);
         }
         Commands::GetHeader { hash } => {
-            let header = client.get_header_by_hash(&hash)?;
+            let header = client.get_header_by_hash(&hash).await?;
             println!("{:#?}", header);
         }
         Commands::GetBlockStatus { hash } => {
-            let status = client.get_block_status(&hash)?;
+            let status = client.get_block_status(&hash).await?;
             println!("{:#?}", status);
         }
         Commands::GetBlock { hash } => {
-            let block = client.get_block_by_hash(&hash)?.ok_or(anyhow!("None"))?;
+            let block = client.get_block_by_hash(&hash).await?.ok_or(anyhow!("None"))?;
             for tx in &block.txdata {
                 println!("{:#?}", tx.compute_txid());
             }
         }
         Commands::GetMerkleProof { txid } => {
-            let res = client.get_merkle_proof(&txid)?;
+            let res = client.get_merkle_proof(&txid).await?;
             println!("{:#?}", res);
         }
         Commands::GetMerkleBlock { txid } => {
-            let res = client.get_merkle_block(&txid)?;
+            let res = client.get_merkle_block(&txid).await?;
             println!("{:#?}", res);
         }
         Commands::GetOutputStatus { txid, index } => {
-            let status = client.get_output_status(&txid, index)?.ok_or(anyhow!("None"))?;
+            let status = client.get_output_status(&txid, index).await?.ok_or(anyhow!("None"))?;
             println!("{:#?}", status);
         }
         Commands::Broadcast { tx_hex } => {
             let tx: Transaction = consensus::encode::deserialize_hex(&tx_hex)?;
-            client.broadcast(&tx)?;
+            client.broadcast(&tx).await?;
         }
         Commands::GetTip => {
-            let blocks = client.get_blocks(None)?;
+            let blocks = client.get_blocks(None).await?;
             println!("{:#?}", &blocks[0]);
         }
         Commands::GetBlockHash { height } => {
-            let hash = client.get_block_hash(height)?;
+            let hash = client.get_block_hash(height).await?;
             println!("{:#?}", hash);
         }
         Commands::GetFeeEstimates => {
-            let fees = client.get_fee_estimates()?;
+            let fees = client.get_fee_estimates().await?;
             println!("{:#?}", fees);
         }
         Commands::GetScriptHashTxs { address, last_seen } => {
             let addr = address.clone().assume_checked();
-            let txs = client.scripthash_txs(&addr.script_pubkey(), last_seen)?;
+            let txs = client.scripthash_txs(&addr.script_pubkey(), last_seen).await?;
             for tx in txs {
                 println!("{:#?}", tx.txid);
             }
         }
         Commands::GetBlocks { height } => {
-            let blocks = client.get_blocks(height)?;
+            let blocks = client.get_blocks(height).await?;
             println!("{:#?}", blocks);
         }
     }
