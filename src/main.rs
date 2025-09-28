@@ -1,22 +1,26 @@
-//! Esplora API Command Line Interface.
+//! Mempool Space API Command Line Interface.
 //!
 //! This binary provides a command line interface (CLI) for
-//! [`rust-esplora-client`](esplora_client).
+//! [`mempool_space_api`].
 
+#![allow(unused_imports)]
 #![allow(clippy::uninlined_format_args)]
 
 use anyhow::anyhow;
 use bitcoin::{address::NetworkUnchecked, consensus, Address, BlockHash, Transaction, Txid};
 use clap::{Parser, Subcommand};
-use esplora_client::Builder;
+use mempool_space_api::{tokio, Http};
+use mempool_space_api::{AsyncClient, Error, ReqwestClient, ReqwestError};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
+    /// CLI command.
     #[command(subcommand)]
     command: Commands,
-    #[clap(long, short, default_value = "https://blockstream.info/api")]
-    network: Option<String>,
+    /// Server URL.
+    #[clap(long, short, default_value = "https://mempool.space/api")]
+    url: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -41,7 +45,7 @@ enum Commands {
     /// Get transaction merkle block inclusion proof by id
     GetMerkleBlock { txid: Txid },
     /// Get output spending status by tx id and output index
-    GetOutputStatus { txid: Txid, index: u64 },
+    GetOutputStatus { txid: Txid, index: u32 },
     /// Broadcast transaction.
     Broadcast { tx_hex: String },
     /// Get best blockhash and height
@@ -67,32 +71,29 @@ enum Commands {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let network = cli.network.expect("must set esplora url");
-    let builder = Builder::new(&network);
-    let client = builder.build_async()?;
+    let url = cli.url.ok_or(anyhow!("must set esplora url"))?;
+    let reqwest_client = ReqwestClient::default();
+    let client = AsyncClient::new(&url, reqwest_client);
 
     match cli.command {
         Commands::GetTx { txid } => {
-            let tx = client.get_tx(&txid).await?.ok_or(anyhow!("None"))?;
-            println!("{:#?}", bitcoin::consensus::encode::serialize_hex(&tx));
+            let tx = client.get_tx(&txid).await?;
+            println!("{:#?}", consensus::encode::serialize_hex(&tx));
         }
         Commands::GetTxInfo { txid } => {
             let res = client.get_tx_info(&txid).await?;
             println!("{:#?}", res);
         }
         Commands::GetTxAtIndex { hash, index } => {
-            let txid = client
-                .get_txid_at_block_index(&hash, index)
-                .await?
-                .ok_or(anyhow!("None"))?;
-            println!("{:#?}", txid);
+            let txid = client.get_tx_at_index(&hash, index).await.map_err(raise_404)?;
+            println!("{}", txid);
         }
         Commands::GetTxStatus { txid } => {
             let tx_status = client.get_tx_status(&txid).await?;
             println!("{:#?}", tx_status);
         }
         Commands::GetHeader { hash } => {
-            let header = client.get_header_by_hash(&hash).await?;
+            let header = client.get_block_header(&hash).await?;
             println!("{:#?}", header);
         }
         Commands::GetBlockStatus { hash } => {
@@ -100,42 +101,43 @@ async fn main() -> anyhow::Result<()> {
             println!("{:#?}", status);
         }
         Commands::GetBlock { hash } => {
-            let block = client.get_block_by_hash(&hash).await?.ok_or(anyhow!("None"))?;
+            let block = client.get_block(&hash).await.map_err(raise_404)?;
             for tx in &block.txdata {
                 println!("{:#?}", tx.compute_txid());
             }
         }
         Commands::GetMerkleProof { txid } => {
-            let res = client.get_merkle_proof(&txid).await?;
-            println!("{:#?}", res);
+            let merkle_proof = client.get_merkle_proof(&txid).await?;
+            println!("{:#?}", merkle_proof);
         }
         Commands::GetMerkleBlock { txid } => {
-            let res = client.get_merkle_block(&txid).await?;
-            println!("{:#?}", res);
+            let merkle_block = client.get_merkle_block(&txid).await?;
+            println!("{:#?}", merkle_block);
         }
         Commands::GetOutputStatus { txid, index } => {
-            let status = client.get_output_status(&txid, index).await?.ok_or(anyhow!("None"))?;
+            let status = client.get_output_status(&txid, index).await?;
             println!("{:#?}", status);
         }
         Commands::Broadcast { tx_hex } => {
             let tx: Transaction = consensus::encode::deserialize_hex(&tx_hex)?;
-            client.broadcast(&tx).await?;
+            let txid = client.broadcast(&tx).await?;
+            println!("{:#?}", txid);
         }
         Commands::GetTip => {
             let blocks = client.get_blocks(None).await?;
             println!("{:#?}", &blocks[0]);
         }
         Commands::GetBlockHash { height } => {
-            let hash = client.get_block_hash(height).await?;
+            let hash = client.get_block_hash(height).await.map_err(raise_404)?;
             println!("{:#?}", hash);
         }
         Commands::GetFeeEstimates => {
-            let fees = client.get_fee_estimates().await?;
+            let fees = client.get_recommended_fees().await?;
             println!("{:#?}", fees);
         }
         Commands::GetScriptHashTxs { address, last_seen } => {
-            let addr = address.clone().assume_checked();
-            let txs = client.scripthash_txs(&addr.script_pubkey(), last_seen).await?;
+            let addr = address.clone().require_network(bitcoin::Network::Bitcoin)?;
+            let txs = client.get_scripthash_txs(&addr.script_pubkey(), last_seen).await?;
             for tx in txs {
                 println!("{:#?}", tx.txid);
             }
@@ -147,4 +149,13 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Return `Err(None)` if the response status is `404 NOT FOUND`.
+fn raise_404(e: Error<ReqwestError>) -> anyhow::Error {
+    if let Error::Http(ReqwestError::HttpResponse { status: 404, .. }) = e {
+        anyhow!("None")
+    } else {
+        anyhow!(e)
+    }
 }
