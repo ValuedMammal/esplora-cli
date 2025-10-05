@@ -27,7 +27,7 @@ enum Commands {
     /// Get info of a transaction.
     GetTxInfo { txid: Txid },
     /// Get transaction at block index
-    GetTxAtBlockIndex { hash: BlockHash, index: usize },
+    GetTxAtIndex { hash: BlockHash, index: usize },
     /// Get transaction status by id
     GetTxStatus { txid: Txid },
     /// Get block header by block hash
@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
             let res = client.get_tx_info(&txid).await?;
             println!("{:#?}", res);
         }
-        Commands::GetTxAtBlockIndex { hash, index } => {
+        Commands::GetTxAtIndex { hash, index } => {
             let txid = client
                 .get_txid_at_block_index(&hash, index)
                 .await?
